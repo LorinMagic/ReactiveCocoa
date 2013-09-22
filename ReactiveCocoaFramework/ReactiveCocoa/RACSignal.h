@@ -19,7 +19,7 @@
 //
 // This block should do the minimum amount of work that will result in at least
 // one signal event.
-typedef void (^RACSignalStepBlock)(id<RACSubscriber> subscriber);
+typedef void (^RACSignalStepBlock)(void);
 
 @interface RACSignal : RACStream
 
@@ -28,16 +28,17 @@ typedef void (^RACSignalStepBlock)(id<RACSubscriber> subscriber);
 //
 // generationBlock - Called when the signal is subscribed to, this block sets up
 //					 any initial state for the generator, then returns a "step"
-//					 block that will be used to incrementally generate the actual events.
-//					 The generator block should not do much, instead deferring
-//					 most of the work to the step block. `disposable` can be
-//					 modified freely within this block or within the
-//					 `RACSignalStepBlock` to ensure that resources are properly
-//					 cleaned up when the signal terminates or is canceled.
+//					 block that will be used to incrementally generate the
+//					 signal events. Although you can send events to `subscriber`
+//					 from the outer block, any non-setup work should be deferred
+//					 to the inner step block instead. Add disposables to
+//					 `disposable` from either block when you need to clean up
+//					 resources upon signal termination or cancelation.
 //
-// Returns a signal which invokes `generationBlock` once per subscription, and
-// forwards any events sent from the `RACSignalStepBlock`.
-+ (RACSignal *)generator:(RACSignalStepBlock (^)(RACCompoundDisposable *disposable))generationBlock;
+// Returns a signal which invokes `generationBlock` once per subscription, then
+// repeatedly invokes the returned `RACSignalStepBlock` whenever the subscriber
+// is ready for more events.
++ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generationBlock;
 
 // Returns a signal that immediately sends the given error.
 + (RACSignal *)error:(NSError *)error;
