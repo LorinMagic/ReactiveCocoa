@@ -14,37 +14,30 @@
 @class RACSubject;
 @protocol RACSubscriber;
 
+// Performs one "step" of a generator signal, sending events to the provided
+// subscriber.
+//
+// This block should do the minimum amount of work that will result in at least
+// one signal event.
+typedef void (^RACSignalStepBlock)(id<RACSubscriber> subscriber);
+
 @interface RACSignal : RACStream
 
-// Creates a new signal. This is the preferred way to create a new signal
-// operation or behavior.
+// Creates a signal that generates events incrementally. This is the preferred
+// way to create a new signal operation or behavior.
 //
-// Events can be sent to new subscribers immediately in the `didSubscribe`
-// block, but the subscriber will not be able to dispose of the signal until
-// a RACDisposable is returned from `didSubscribe`. In the case of infinite
-// signals, this won't _ever_ happen if events are sent immediately.
+// generationBlock - Called when the signal is subscribed to, this block sets up
+//					 any initial state for the generator, then returns a "step"
+//					 block that will be used to incrementally generate the actual events.
+//					 The generator block should not do much, instead deferring
+//					 most of the work to the step block. `disposable` can be
+//					 modified freely within this block or within the
+//					 `RACSignalStepBlock` to ensure that resources are properly
+//					 cleaned up when the signal terminates or is canceled.
 //
-// To ensure that the signal is disposable, events can be scheduled on the
-// +[RACScheduler currentScheduler] (so that they're deferred, not sent
-// immediately), or they can be sent in the background. The RACDisposable
-// returned by the `didSubscribe` block should cancel any such scheduling or
-// asynchronous work.
-//
-// didSubscribe - Called when the signal is subscribed to. The new subscriber is
-//                passed in. You can then manually control the <RACSubscriber> by
-//                sending it -sendNext:, -sendError:, and -sendCompleted,
-//                as defined by the operation you're implementing. This block
-//                should return a RACDisposable which cancels any ongoing work
-//                triggered by the subscription, and cleans up any resources or
-//                disposables created as part of it. When the disposable is
-//                disposed of, the signal must not send any more events to the
-//                `subscriber`. If no cleanup is necessary, return nil.
-//
-// **Note:** The `didSubscribe` block is called every time a new subscriber
-// subscribes. Any side effects within the block will thus execute once for each
-// subscription, not necessarily on one thread, and possibly even
-// simultaneously!
-+ (RACSignal *)createSignal:(RACDisposable * (^)(id<RACSubscriber> subscriber))didSubscribe;
+// Returns a signal which invokes `generationBlock` once per subscription, and
+// forwards any events sent from the `RACSignalStepBlock`.
++ (RACSignal *)generator:(RACSignalStepBlock (^)(RACCompoundDisposable *disposable))generationBlock;
 
 // Returns a signal that immediately sends the given error.
 + (RACSignal *)error:(NSError *)error;
