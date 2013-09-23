@@ -78,7 +78,7 @@
 		if (self.disposable.disposed) return;
 
 		RACSignalStepBlock stepBlock = generatorBlock(self, self.disposable);
-		if (stepBlock == nil) return;
+		if (stepBlock == nil || self.disposable.disposed) return;
 
 		RACDisposable *recursiveDisposable = [scheduler scheduleRecursiveBlock:^(dispatch_block_t reschedule) {
 			stepBlock();
