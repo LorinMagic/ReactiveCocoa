@@ -7,6 +7,7 @@
 //
 
 #import "RACSubscriber.h"
+#import "RACSignal+Private.h"
 
 @class RACCompoundDisposable;
 
@@ -26,5 +27,12 @@
 /// completed  - A block to invoke when the signal sends a `completed` event.
 ///              This may be nil.
 - (id)initWithNext:(void (^)(id x))next error:(void (^)(NSError *error))error completed:(void (^)(void))completed;
+
+// Begins pulling events from a generator.
+//
+// generatorBlock - A block to invoke immediately. Whenever the subscriber is ready
+//                  for more events, the returned `RACSignalStepBlock` will be
+//                  invoked as well. This block must not be nil.
+- (void)startWithGenerator:(RACSignalGeneratorBlock)generatorBlock;
 
 @end

@@ -10,6 +10,7 @@
 #import "RACSubscriber+Private.h"
 #import "EXTScope.h"
 #import "RACCompoundDisposable.h"
+#import "RACScheduler+Private.h"
 
 @interface RACSubscriber ()
 
@@ -67,6 +68,27 @@
 	[self.disposable dispose];
 }
 
+#pragma mark Generators
+
+- (void)startWithGenerator:(RACSignalGeneratorBlock)generatorBlock {
+	NSCParameterAssert(generatorBlock != nil);
+
+	RACScheduler *scheduler = RACScheduler.subscriptionScheduler;
+	[scheduler schedule:^{
+		if (self.disposable.disposed) return;
+
+		RACSignalStepBlock stepBlock = generatorBlock(self, self.disposable);
+		if (stepBlock == nil) return;
+
+		RACDisposable *recursiveDisposable = [scheduler scheduleRecursiveBlock:^(dispatch_block_t reschedule) {
+			stepBlock();
+			reschedule();
+		}];
+
+		if (recursiveDisposable != nil) [self.disposable addDisposable:recursiveDisposable];
+	}];
+}
+
 #pragma mark RACSubscriber
 
 - (void)sendNext:(id)value {
@@ -99,10 +121,6 @@
 		[self.disposable dispose];
 		if (completedBlock != nil) completedBlock();
 	}
-}
-
-- (void)didSubscribeWithDisposable:(RACDisposable *)d {
-	if (d != nil) [self.disposable addDisposable:d];
 }
 
 @end

@@ -8,6 +8,9 @@
 
 #import "RACSignal.h"
 
+// The block type passed to the +generator: constructor.
+typedef RACSignalStepBlock (^RACSignalGeneratorBlock)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable); 
+
 @class RACSubscriber;
 
 @interface RACSignal ()

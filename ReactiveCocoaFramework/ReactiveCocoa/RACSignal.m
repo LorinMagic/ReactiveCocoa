@@ -14,7 +14,6 @@
 #import "RACDisposable.h"
 #import "RACMulticastConnection.h"
 #import "RACReplaySubject.h"
-#import "RACScheduler+Private.h"
 #import "RACScheduler.h"
 #import "RACSignal+Operations.h"
 #import "RACSignal+Private.h"
@@ -23,9 +22,6 @@
 #import "RACSubscriber.h"
 #import "RACTuple.h"
 #import <libkern/OSAtomic.h>
-
-// The block type passed to the +generator: constructor.
-typedef RACSignalStepBlock (^RACSignalGeneratorBlock)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable); 
 
 // Retains signals while they wait for subscriptions.
 //
@@ -83,11 +79,11 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 }
 
 + (RACSignal *)createSignal:(RACDisposable * (^)(id<RACSubscriber> subscriber))didSubscribe {
-	RACSignal *signal = [self generator:^(id<RACSubscriber> subscriber, RACCompoundDisposable *compoundDisposable) {
+	RACSignal *signal = [self generator:^ RACSignalStepBlock (id<RACSubscriber> subscriber, RACCompoundDisposable *compoundDisposable) {
 		RACDisposable *disposable = didSubscribe(subscriber);
 		if (disposable != nil) [compoundDisposable addDisposable:disposable];
 
-		return ^{};
+		return nil;
 	}];
 
 	return [signal setNameWithFormat:@"+createSignal:"];
@@ -233,14 +229,7 @@ static void RACCheckActiveSignals(void) {
 		}
 	}]];
 
-	if (self.generatorBlock != nil) {
-		RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
-			RACSignalStepBlock stepBlock = self.generatorBlock(subscriber, subscriber.disposable);
-			stepBlock();
-		}];
-
-		if (schedulingDisposable != nil) [subscriber.disposable addDisposable:schedulingDisposable];
-	}
+	if (self.generatorBlock != nil) [subscriber startWithGenerator:self.generatorBlock];
 }
 
 - (void)performBlockOnEachSubscriber:(void (^)(id<RACSubscriber> subscriber))block {
