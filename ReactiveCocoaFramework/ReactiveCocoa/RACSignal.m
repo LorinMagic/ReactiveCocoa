@@ -74,9 +74,19 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 	RACActiveSignals = CFSetCreateMutable(NULL, 0, &callbacks);
 }
 
-+ (RACSignal *)createSignal:(RACDisposable * (^)(id<RACSubscriber> subscriber))didSubscribe {
++ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generationBlock {
 	RACSignal *signal = [[RACSignal alloc] init];
-	signal.didSubscribe = didSubscribe;
+	return [signal setNameWithFormat:@"+generator:"];
+}
+
++ (RACSignal *)createSignal:(RACDisposable * (^)(id<RACSubscriber> subscriber))didSubscribe {
+	RACSignal *signal = [self generator:^(id<RACSubscriber> subscriber, RACCompoundDisposable *compoundDisposable) {
+		RACDisposable *disposable = didSubscribe(subscriber);
+		if (disposable != nil) [compoundDisposable addDisposable:disposable];
+
+		return ^{};
+	}];
+
 	return [signal setNameWithFormat:@"+createSignal:"];
 }
 
