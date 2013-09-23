@@ -14,190 +14,190 @@
 @class RACSubject;
 @protocol RACSubscriber;
 
-// Performs one "step" of a generator signal, sending events to the provided
-// subscriber.
-//
-// This block should do the minimum amount of work that will result in at least
-// one signal event.
+/// Performs one "step" of a generator signal, sending events to the provided
+/// subscriber.
+///
+/// This block should do the minimum amount of work that will result in at least
+/// one signal event.
 typedef void (^RACSignalStepBlock)(void);
 
 @interface RACSignal : RACStream
 
-// Creates a signal that generates events incrementally. This is the preferred
-// way to create a new signal operation or behavior.
-//
-// generationBlock - Called when the signal is subscribed to, this block sets up
-//					 any initial state for the generator, then returns a "step"
-//					 block that will be used to incrementally generate the
-//					 signal events. Although you can send events to `subscriber`
-//					 from the outer block, any non-setup work should be deferred
-//					 to the inner step block instead. Add disposables to
-//					 `disposable` from either block when you need to clean up
-//					 resources upon signal termination or cancelation.
-//
-// Returns a signal which invokes `generationBlock` once per subscription, then
-// repeatedly invokes the returned `RACSignalStepBlock` whenever the subscriber
-// is ready for more events.
+/// Creates a signal that generates events incrementally. This is the preferred
+/// way to create a new signal operation or behavior.
+///
+/// generationBlock - Called when the signal is subscribed to, this block sets up
+///                   any initial state for the generator, then returns a "step"
+///                   block that will be used to incrementally generate the
+///                   signal events. Although you can send events to `subscriber`
+///                   from the outer block, any non-setup work should be deferred
+///                   to the inner step block instead. Add disposables to
+///                   `disposable` from either block when you need to clean up
+///                   resources upon signal termination or cancelation.
+///
+/// Returns a signal which invokes `generationBlock` once per subscription, then
+/// repeatedly invokes the returned `RACSignalStepBlock` whenever the subscriber
+/// is ready for more events.
 + (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generationBlock;
 
-// Returns a signal that immediately sends the given error.
+/// Returns a signal that immediately sends the given error.
 + (RACSignal *)error:(NSError *)error;
 
-// Returns a signal that never completes.
+/// Returns a signal that never completes.
 + (RACSignal *)never;
 
-// Immediately schedules the given block on the given scheduler. The block is
-// given a subscriber to which it can send events.
-//
-// scheduler - The scheduler on which `block` will be scheduled and results
-//             delivered. Cannot be nil.
-// block     - The block to invoke. Cannot be NULL.
-//
-// Returns a signal which will send all events sent on the subscriber given to
-// `block`. All events will be sent on `scheduler` and it will replay any missed
-// events to new subscribers.
+/// Immediately schedules the given block on the given scheduler. The block is
+/// given a subscriber to which it can send events.
+///
+/// scheduler - The scheduler on which `block` will be scheduled and results
+///             delivered. Cannot be nil.
+/// block     - The block to invoke. Cannot be NULL.
+///
+/// Returns a signal which will send all events sent on the subscriber given to
+/// `block`. All events will be sent on `scheduler` and it will replay any missed
+/// events to new subscribers.
 + (RACSignal *)startEagerlyWithScheduler:(RACScheduler *)scheduler block:(void (^)(id<RACSubscriber> subscriber))block;
 
-// Invokes the given block only on the first subscription. The block is given a
-// subscriber to which it can send events.
-//
-// Note that disposing of the subscription to the returned signal will *not*
-// dispose of the underlying subscription. If you need that behavior, see
-// -[RACMulticastConnection autoconnect]. The underlying subscription will never
-// be disposed of. Because of this, `block` should never return an infinite
-// signal since there would be no way of ending it.
-//
-// scheduler - The scheduler on which the block should be scheduled. Note that 
-//             if given +[RACScheduler immediateScheduler], the block will be
-//             invoked synchronously on the first subscription. Cannot be nil.
-// block     - The block to invoke on the first subscription. Cannot be NULL.
-//
-// Returns a signal which will pass through the events sent to the subscriber
-// given to `block` and replay any missed events to new subscribers.
+/// Invokes the given block only on the first subscription. The block is given a
+/// subscriber to which it can send events.
+///
+/// Note that disposing of the subscription to the returned signal will *not*
+/// dispose of the underlying subscription. If you need that behavior, see
+/// -[RACMulticastConnection autoconnect]. The underlying subscription will never
+/// be disposed of. Because of this, `block` should never return an infinite
+/// signal since there would be no way of ending it.
+///
+/// scheduler - The scheduler on which the block should be scheduled. Note that 
+///             if given +[RACScheduler immediateScheduler], the block will be
+///             invoked synchronously on the first subscription. Cannot be nil.
+/// block     - The block to invoke on the first subscription. Cannot be NULL.
+///
+/// Returns a signal which will pass through the events sent to the subscriber
+/// given to `block` and replay any missed events to new subscribers.
 + (RACSignal *)startLazilyWithScheduler:(RACScheduler *)scheduler block:(void (^)(id<RACSubscriber> subscriber))block;
 
 @end
 
 @interface RACSignal (RACStream)
 
-// Returns a signal that immediately sends the given value and then completes.
+/// Returns a signal that immediately sends the given value and then completes.
 + (RACSignal *)return:(id)value;
 
-// Returns a signal that immediately completes.
+/// Returns a signal that immediately completes.
 + (RACSignal *)empty;
 
-// Subscribes to `signal` when the source signal completes.
+/// Subscribes to `signal` when the source signal completes.
 - (RACSignal *)concat:(RACSignal *)signal;
 
-// Zips the values in the receiver with those of the given signal to create
-// RACTuples.
-//
-// The first `next` of each stream will be combined, then the second `next`, and
-// so forth, until either signal completes or errors.
-//
-// signal - The signal to zip with. This must not be `nil`.
-//
-// Returns a new signal of RACTuples, representing the combined values of the
-// two signals. Any error from one of the original signals will be forwarded on
-// the returned signal.
+/// Zips the values in the receiver with those of the given signal to create
+/// RACTuples.
+///
+/// The first `next` of each stream will be combined, then the second `next`, and
+/// so forth, until either signal completes or errors.
+///
+/// signal - The signal to zip with. This must not be `nil`.
+///
+/// Returns a new signal of RACTuples, representing the combined values of the
+/// two signals. Any error from one of the original signals will be forwarded on
+/// the returned signal.
 - (RACSignal *)zipWith:(RACSignal *)signal;
 
 @end
 
 @interface RACSignal (Subscription)
 
-// Subscribes `subscriber` to changes on the receiver. The receiver defines which
-// events it actually sends and in what situations the events are sent.
-//
-// Subscription will always happen on a valid RACScheduler. If the
-// +[RACScheduler currentScheduler] cannot be determined at the time of
-// subscription (e.g., because the calling code is running on a GCD queue or
-// NSOperationQueue), subscription will occur on a private background scheduler.
-// On the main thread, subscriptions will always occur immediately, with a
-// +[RACScheduler currentScheduler] of +[RACScheduler mainThreadScheduler].
-//
-// Returns nil or a disposable. You can call -[RACDisposable dispose] if you
-// need to end your subscription before it would "naturally" end, either by
-// completing or erroring. Once the disposable has been disposed, the subscriber
-// won't receive any more events from the subscription.
+/// Subscribes `subscriber` to changes on the receiver. The receiver defines which
+/// events it actually sends and in what situations the events are sent.
+///
+/// Subscription will always happen on a valid RACScheduler. If the
+/// +[RACScheduler currentScheduler] cannot be determined at the time of
+/// subscription (e.g., because the calling code is running on a GCD queue or
+/// NSOperationQueue), subscription will occur on a private background scheduler.
+/// On the main thread, subscriptions will always occur immediately, with a
+/// +[RACScheduler currentScheduler] of +[RACScheduler mainThreadScheduler].
+///
+/// Returns nil or a disposable. You can call -[RACDisposable dispose] if you
+/// need to end your subscription before it would "naturally" end, either by
+/// completing or erroring. Once the disposable has been disposed, the subscriber
+/// won't receive any more events from the subscription.
 - (RACDisposable *)subscribe:(id<RACSubscriber>)subscriber;
 
-// Convenience method to subscribe to the `next` event.
-//
-// This corresponds to `IObserver<T>.OnNext` in Rx.
+/// Convenience method to subscribe to the `next` event.
+///
+/// This corresponds to `IObserver<T>.OnNext` in Rx.
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock;
 
-// Convenience method to subscribe to the `next` and `completed` events.
+/// Convenience method to subscribe to the `next` and `completed` events.
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock completed:(void (^)(void))completedBlock;
 
-// Convenience method to subscribe to the `next`, `completed`, and `error` events.
+/// Convenience method to subscribe to the `next`, `completed`, and `error` events.
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock error:(void (^)(NSError *error))errorBlock completed:(void (^)(void))completedBlock;
 
-// Convenience method to subscribe to `error` events.
-//
-// This corresponds to the `IObserver<T>.OnError` in Rx.
+/// Convenience method to subscribe to `error` events.
+///
+/// This corresponds to the `IObserver<T>.OnError` in Rx.
 - (RACDisposable *)subscribeError:(void (^)(NSError *error))errorBlock;
 
-// Convenience method to subscribe to `completed` events.
-//
-// This corresponds to the `IObserver<T>.OnCompleted` in Rx.
+/// Convenience method to subscribe to `completed` events.
+///
+/// This corresponds to the `IObserver<T>.OnCompleted` in Rx.
 - (RACDisposable *)subscribeCompleted:(void (^)(void))completedBlock;
 
-// Convenience method to subscribe to `next` and `error` events.
+/// Convenience method to subscribe to `next` and `error` events.
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock error:(void (^)(NSError *error))errorBlock;
 
-// Convenience method to subscribe to `error` and `completed` events.
+/// Convenience method to subscribe to `error` and `completed` events.
 - (RACDisposable *)subscribeError:(void (^)(NSError *error))errorBlock completed:(void (^)(void))completedBlock;
 
 @end
 
-// Additional methods to assist with debugging.
+/// Additional methods to assist with debugging.
 @interface RACSignal (Debugging)
 
-// Logs all events that the receiver sends.
+/// Logs all events that the receiver sends.
 - (RACSignal *)logAll;
 
-// Logs each `next` that the receiver sends.
+/// Logs each `next` that the receiver sends.
 - (RACSignal *)logNext;
 
-// Logs any error that the receiver sends.
+/// Logs any error that the receiver sends.
 - (RACSignal *)logError;
 
-// Logs any `completed` event that the receiver sends.
+/// Logs any `completed` event that the receiver sends.
 - (RACSignal *)logCompleted;
 
 @end
 
-// Additional methods to assist with unit testing.
-//
-// **These methods should never ship in production code.**
+/// Additional methods to assist with unit testing.
+///
+/// **These methods should never ship in production code.**
 @interface RACSignal (Testing)
 
-// Spins the main run loop for a short while, waiting for the receiver to send a `next`.
-//
-// **Because this method executes the run loop recursively, it should only be used
-// on the main thread, and only from a unit test.**
-//
-// defaultValue - Returned if the receiver completes or errors before sending
-//                a `next`, or if the method times out. This argument may be
-//                nil.
-// success      - If not NULL, set to whether the receiver completed
-//                successfully.
-// error        - If not NULL, set to any error that occurred.
-//
-// Returns the first value received, or `defaultValue` if no value is received
-// before the signal finishes or the method times out.
+/// Spins the main run loop for a short while, waiting for the receiver to send a `next`.
+///
+/// **Because this method executes the run loop recursively, it should only be used
+/// on the main thread, and only from a unit test.**
+///
+/// defaultValue - Returned if the receiver completes or errors before sending
+///                a `next`, or if the method times out. This argument may be
+///                nil.
+/// success      - If not NULL, set to whether the receiver completed
+///                successfully.
+/// error        - If not NULL, set to any error that occurred.
+///
+/// Returns the first value received, or `defaultValue` if no value is received
+/// before the signal finishes or the method times out.
 - (id)asynchronousFirstOrDefault:(id)defaultValue success:(BOOL *)success error:(NSError **)error;
 
-// Spins the main run loop for a short while, waiting for the receiver to complete.
-//
-// **Because this method executes the run loop recursively, it should only be used
-// on the main thread, and only from a unit test.**
-//
-// error - If not NULL, set to any error that occurs.
-//
-// Returns whether the signal completed successfully before timing out. If NO,
-// `error` will be set to any error that occurred.
+/// Spins the main run loop for a short while, waiting for the receiver to complete.
+///
+/// **Because this method executes the run loop recursively, it should only be used
+/// on the main thread, and only from a unit test.**
+///
+/// error - If not NULL, set to any error that occurs.
+///
+/// Returns whether the signal completed successfully before timing out. If NO,
+/// `error` will be set to any error that occurred.
 - (BOOL)asynchronouslyWaitUntilCompleted:(NSError **)error;
 
 @end
