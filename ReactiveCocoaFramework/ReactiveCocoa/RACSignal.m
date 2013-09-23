@@ -25,6 +25,9 @@
 #import "RACTuple.h"
 #import <libkern/OSAtomic.h>
 
+// The block type passed to the +generator: constructor.
+typedef RACSignalStepBlock (^RACSignalGeneratorBlock)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable); 
+
 // Retains signals while they wait for subscriptions.
 //
 // This set must only be used on the main thread.
@@ -54,7 +57,8 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 	OSSpinLock _subscribersLock;
 }
 
-@property (nonatomic, copy) RACDisposable * (^didSubscribe)(id<RACSubscriber> subscriber);
+// If not `nil`, a block to invoke when new subscribers attach.
+@property (nonatomic, copy, readonly) RACSignalGeneratorBlock generatorBlock;
 
 @end
 
@@ -74,8 +78,8 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 	RACActiveSignals = CFSetCreateMutable(NULL, 0, &callbacks);
 }
 
-+ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generationBlock {
-	RACSignal *signal = [[RACSignal alloc] init];
++ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generatorBlock {
+	RACSignal *signal = [[RACSignal alloc] initWithGenerator:generatorBlock];
 	return [signal setNameWithFormat:@"+generator:"];
 }
 
@@ -134,12 +138,23 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 		setNameWithFormat:@"+startLazilyWithScheduler:%@ block:", scheduler];
 }
 
-- (instancetype)init {
+- (id)init {
 	self = [super init];
 	if (self == nil) return nil;
 	
 	// As soon as we're created we're already trying to be released. Such is life.
 	[self invalidateGlobalRefIfNoNewSubscribersShowUp];
+	
+	return self;
+}
+
+- (id)initWithGenerator:(RACSignalGeneratorBlock)generatorBlock {
+	NSCParameterAssert(generatorBlock != nil);
+
+	self = [self init];
+	if (self == nil) return nil;
+
+	_generatorBlock = [generatorBlock copy];
 	
 	return self;
 }
@@ -447,10 +462,10 @@ static void RACCheckActiveSignals(void) {
 
 	[disposable addDisposable:defaultDisposable];
 
-	if (self.didSubscribe != NULL) {
+	if (self.generatorBlock != nil) {
 		RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
-			RACDisposable *innerDisposable = self.didSubscribe(subscriber);
-			if (innerDisposable != nil) [disposable addDisposable:innerDisposable];
+			RACSignalStepBlock stepBlock = self.generatorBlock(subscriber, disposable);
+			stepBlock();
 		}];
 
 		if (schedulingDisposable != nil) [disposable addDisposable:schedulingDisposable];

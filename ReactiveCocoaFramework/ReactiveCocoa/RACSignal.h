@@ -27,23 +27,23 @@ typedef void (^RACSignalStepBlock)(void);
 /// Creates a signal that generates events incrementally. This is the preferred
 /// way to create a new signal operation or behavior.
 ///
-/// generationBlock - Called when the signal is subscribed to, this block sets up
-///                   any initial state for the generator, then returns a "step"
-///                   block that will be used to incrementally generate the
-///                   signal events. Although you can send events to `subscriber`
-///                   from the outer block, any non-setup work should be deferred
-///                   to the inner step block instead. Add disposables to
-///                   `disposable` from either block when you need to clean up
-///                   resources upon signal termination or cancelation.
+/// generatorBlock - Called when the signal is subscribed to, this block sets up
+///                  any initial state for the generator, then returns a "step"
+///                  block that will be used to incrementally generate the
+///                  signal events. Although you can send events to `subscriber`
+///                  from the outer block, any non-setup work should be deferred
+///                  to the inner step block instead. Add disposables to
+///                  `disposable` from either block when you need to clean up
+///                  resources upon signal termination or cancelation.
 ///
-/// **Note:** `generationBlock` is called _every time_ a new subscriber
+/// **Note:** `generatorBlock` is called _every time_ a new subscriber
 /// subscribes. Any side effects within the block will thus execute once for each
 /// subscription, not necessarily on one thread, and possibly even simultaneously!
 ///
-/// Returns a signal which invokes `generationBlock` once per subscription, then
+/// Returns a signal which invokes `generatorBlock` once per subscription, then
 /// repeatedly invokes the returned `RACSignalStepBlock` whenever the subscriber
 /// is ready for more events.
-+ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generationBlock;
++ (RACSignal *)generator:(RACSignalStepBlock (^)(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable))generatorBlock;
 
 /// Creates a new signal that performs its work all at once.
 ///
