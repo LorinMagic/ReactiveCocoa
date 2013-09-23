@@ -32,7 +32,7 @@ beforeEach(^{
 	success = YES;
 	error = nil;
 
-	subscriber = [RACSubscriber subscriberWithNext:^(id value) {
+	subscriber = [[RACSubscriber alloc] initWithNext:^(id value) {
 		if (finished) OSAtomicIncrement32Barrier(&nextsAfterFinished);
 
 		[values addObject:value];

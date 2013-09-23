@@ -9,7 +9,8 @@
 #import "RACReplaySubject.h"
 #import "RACDisposable.h"
 #import "RACScheduler+Private.h"
-#import "RACSubscriber.h"
+#import "RACSignal+Private.h"
+#import "RACSubscriber+Private.h"
 #import "RACTuple.h"
 #import "RACCompoundDisposable.h"
 
@@ -52,33 +53,28 @@ const NSUInteger RACReplaySubjectUnlimitedCapacity = NSUIntegerMax;
 
 #pragma mark RACSignal
 
-- (RACDisposable *)subscribe:(id<RACSubscriber>)subscriber {
-	RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
-
+- (void)addSubscriber:(RACSubscriber *)subscriber {
 	RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
 		@synchronized (self) {
 			for (id value in self.valuesReceived) {
-				if (compoundDisposable.disposed) return;
+				if (subscriber.disposable.disposed) return;
 
 				[subscriber sendNext:([value isKindOfClass:RACTupleNil.class] ? nil : value)];
 			}
 
-			if (compoundDisposable.disposed) return;
+			if (subscriber.disposable.disposed) return;
 
 			if (self.hasCompleted) {
 				[subscriber sendCompleted];
 			} else if (self.hasError) {
 				[subscriber sendError:self.error];
 			} else {
-				RACDisposable *subscriptionDisposable = [super subscribe:subscriber];
-				[compoundDisposable addDisposable:subscriptionDisposable];
+				[super addSubscriber:subscriber];
 			}
 		}
 	}];
 
-	if (schedulingDisposable != nil) [compoundDisposable addDisposable:schedulingDisposable];
-
-	return compoundDisposable;
+	if (schedulingDisposable != nil) [subscriber.disposable addDisposable:schedulingDisposable];
 }
 
 #pragma mark RACSubscriber

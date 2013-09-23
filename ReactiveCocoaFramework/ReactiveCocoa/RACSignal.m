@@ -13,7 +13,6 @@
 #import "RACCompoundDisposable.h"
 #import "RACDisposable.h"
 #import "RACMulticastConnection.h"
-#import "RACPassthroughSubscriber.h"
 #import "RACReplaySubject.h"
 #import "RACScheduler+Private.h"
 #import "RACScheduler.h"
@@ -48,7 +47,7 @@ static OSQueueHead RACActiveSignalsToCheck = OS_ATOMIC_QUEUE_INIT;
 static volatile uint32_t RACWillCheckActiveSignals = 0;
 
 @interface RACSignal () {
-	// Contains all subscribers to the receiver.
+	// Contains all RACSubscribers attached to the receiver.
 	//
 	// All access to this array must be synchronized using `_subscribersLock`.
 	NSMutableArray *_subscribers;
@@ -207,6 +206,41 @@ static void RACCheckActiveSignals(void) {
 	OSSpinLockUnlock(&_subscribersLock);
 
 	return count;
+}
+
+- (void)addSubscriber:(RACSubscriber *)subscriber {
+	NSCParameterAssert(subscriber != nil);
+	
+	OSSpinLockLock(&_subscribersLock);
+	if (_subscribers == nil) _subscribers = [[NSMutableArray alloc] init];
+	[_subscribers addObject:subscriber];
+	OSSpinLockUnlock(&_subscribersLock);
+	
+	@weakify(self, subscriber);
+	[subscriber.disposable addDisposable:[RACDisposable disposableWithBlock:^{
+		@strongify(self, subscriber);
+		if (self == nil) return;
+
+		BOOL stillHasSubscribers = YES;
+
+		OSSpinLockLock(&_subscribersLock);
+		[_subscribers removeObjectIdenticalTo:subscriber];
+		stillHasSubscribers = _subscribers.count > 0;
+		OSSpinLockUnlock(&_subscribersLock);
+		
+		if (!stillHasSubscribers) {
+			[self invalidateGlobalRefIfNoNewSubscribersShowUp];
+		}
+	}]];
+
+	if (self.generatorBlock != nil) {
+		RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
+			RACSignalStepBlock stepBlock = self.generatorBlock(subscriber, subscriber.disposable);
+			stepBlock();
+		}];
+
+		if (schedulingDisposable != nil) [subscriber.disposable addDisposable:schedulingDisposable];
+	}
 }
 
 - (void)performBlockOnEachSubscriber:(void (^)(id<RACSubscriber> subscriber))block {
@@ -433,101 +467,47 @@ static void RACCheckActiveSignals(void) {
 @implementation RACSignal (Subscription)
 
 - (RACDisposable *)subscribe:(id<RACSubscriber>)subscriber {
-	NSCParameterAssert(subscriber != nil);
-
-	RACCompoundDisposable *disposable = [RACCompoundDisposable compoundDisposable];
-	subscriber = [[RACPassthroughSubscriber alloc] initWithSubscriber:subscriber disposable:disposable];
-	
-	OSSpinLockLock(&_subscribersLock);
-	if (_subscribers == nil) _subscribers = [[NSMutableArray alloc] init];
-	[_subscribers addObject:subscriber];
-	OSSpinLockUnlock(&_subscribersLock);
-	
-	@weakify(self, subscriber);
-	RACDisposable *defaultDisposable = [RACDisposable disposableWithBlock:^{
-		@strongify(self, subscriber);
-		if (self == nil) return;
-
-		BOOL stillHasSubscribers = YES;
-
-		OSSpinLockLock(&_subscribersLock);
-		[_subscribers removeObjectIdenticalTo:subscriber];
-		stillHasSubscribers = _subscribers.count > 0;
-		OSSpinLockUnlock(&_subscribersLock);
-		
-		if (!stillHasSubscribers) {
-			[self invalidateGlobalRefIfNoNewSubscribersShowUp];
-		}
+	RACSubscriber *wrappedSubscriber = [[RACSubscriber alloc] initWithNext:^(id x) {
+		[subscriber sendNext:x];
+	} error:^(NSError *error) {
+		[subscriber sendError:error];
+	} completed:^{
+		[subscriber sendCompleted];
 	}];
 
-	[disposable addDisposable:defaultDisposable];
-
-	if (self.generatorBlock != nil) {
-		RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
-			RACSignalStepBlock stepBlock = self.generatorBlock(subscriber, disposable);
-			stepBlock();
-		}];
-
-		if (schedulingDisposable != nil) [disposable addDisposable:schedulingDisposable];
-	}
-	
-	[subscriber didSubscribeWithDisposable:disposable];
-	
-	return disposable;
+	[self addSubscriber:wrappedSubscriber];
+	return wrappedSubscriber.disposable;
 }
 
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock {
-	NSCParameterAssert(nextBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:nextBlock error:NULL completed:NULL];
-	return [self subscribe:o];
+	return [self subscribeNext:nextBlock error:nil completed:nil];
 }
 
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock completed:(void (^)(void))completedBlock {
-	NSCParameterAssert(nextBlock != NULL);
-	NSCParameterAssert(completedBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:nextBlock error:NULL completed:completedBlock];
-	return [self subscribe:o];
+	return [self subscribeNext:nextBlock error:nil completed:completedBlock];
 }
 
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock error:(void (^)(NSError *error))errorBlock completed:(void (^)(void))completedBlock {
-	NSCParameterAssert(nextBlock != NULL);
-	NSCParameterAssert(errorBlock != NULL);
-	NSCParameterAssert(completedBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:nextBlock error:errorBlock completed:completedBlock];
-	return [self subscribe:o];
+	RACSubscriber *subscriber = [[RACSubscriber alloc] initWithNext:nextBlock error:errorBlock completed:completedBlock];
+	[self addSubscriber:subscriber];
+
+	return subscriber.disposable;
 }
 
 - (RACDisposable *)subscribeError:(void (^)(NSError *error))errorBlock {
-	NSCParameterAssert(errorBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:NULL error:errorBlock completed:NULL];
-	return [self subscribe:o];
+	return [self subscribeNext:nil error:errorBlock completed:nil];
 }
 
 - (RACDisposable *)subscribeCompleted:(void (^)(void))completedBlock {
-	NSCParameterAssert(completedBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:NULL error:NULL completed:completedBlock];
-	return [self subscribe:o];
+	return [self subscribeNext:nil error:nil completed:completedBlock];
 }
 
 - (RACDisposable *)subscribeNext:(void (^)(id x))nextBlock error:(void (^)(NSError *error))errorBlock {
-	NSCParameterAssert(nextBlock != NULL);
-	NSCParameterAssert(errorBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:nextBlock error:errorBlock completed:NULL];
-	return [self subscribe:o];
+	return [self subscribeNext:nextBlock error:errorBlock completed:nil];
 }
 
 - (RACDisposable *)subscribeError:(void (^)(NSError *))errorBlock completed:(void (^)(void))completedBlock {
-	NSCParameterAssert(completedBlock != NULL);
-	NSCParameterAssert(errorBlock != NULL);
-	
-	RACSubscriber *o = [RACSubscriber subscriberWithNext:NULL error:errorBlock completed:completedBlock];
-	return [self subscribe:o];
+	return [self subscribeNext:nil error:errorBlock completed:completedBlock];
 }
 
 @end

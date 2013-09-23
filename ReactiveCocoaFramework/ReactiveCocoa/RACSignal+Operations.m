@@ -1249,26 +1249,26 @@ static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), voi
 			[closeObserverDisposable dispose], closeObserverDisposable = nil;
 		};
 		
-		RACDisposable *openObserverDisposable = [openSignal subscribe:[RACSubscriber subscriberWithNext:^(id x) {
+		RACDisposable *openObserverDisposable = [openSignal subscribeNext:^(id _) {
 			if(currentWindow == nil) {
 				currentWindow = [RACSubject subject];
 				[subscriber sendNext:currentWindow];
 				
 				currentCloseWindow = closeBlock(currentWindow);
-				closeObserverDisposable = [currentCloseWindow subscribe:[RACSubscriber subscriberWithNext:^(id x) {
+				closeObserverDisposable = [currentCloseWindow subscribeNext:^(id _) {
 					closeCurrentWindow();
 				} error:^(NSError *error) {
 					closeCurrentWindow();
 				} completed:^{
 					closeCurrentWindow();
-				}]];
+				}];
 			}
 		} error:^(NSError *error) {
 			
 		} completed:^{
 			
-		}]];
-				
+		}];
+
 		RACDisposable *selfObserverDisposable = [self subscribeNext:^(id x) {
 			[currentWindow sendNext:x];
 		} error:^(NSError *error) {

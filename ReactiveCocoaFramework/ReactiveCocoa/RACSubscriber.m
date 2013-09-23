@@ -13,13 +13,20 @@
 
 @interface RACSubscriber ()
 
-@property (nonatomic, copy, readonly) void (^next)(id value);
-@property (nonatomic, copy, readonly) void (^error)(NSError *error);
-@property (nonatomic, copy, readonly) void (^completed)(void);
-@property (nonatomic, strong, readonly) RACCompoundDisposable *disposable;
+// If not `nil`, a block to invoke upon `next` events.
+//
+// This should only be used while synchronized on `self`.
+@property (nonatomic, copy) void (^next)(id value);
 
-// This property should only be used while synchronized on self.
-@property (nonatomic, assign) BOOL disposed;
+// If not `nil`, a block to invoke upon any `error` event.
+//
+// This should only be used while synchronized on `self`.
+@property (nonatomic, copy) void (^error)(NSError *error);
+
+// If not `nil`, a block to invoke upon any `completed` event.
+//
+// This should only be used while synchronized on `self`.
+@property (nonatomic, copy) void (^completed)(void);
 
 @end
 
@@ -27,33 +34,32 @@
 
 #pragma mark Lifecycle
 
-+ (instancetype)subscriberWithNext:(void (^)(id x))next error:(void (^)(NSError *error))error completed:(void (^)(void))completed {
-	RACSubscriber *subscriber = [[self alloc] init];
-
-	subscriber->_next = [next copy];
-	subscriber->_error = [error copy];
-	subscriber->_completed = [completed copy];
-
-	return subscriber;
+- (id)init {
+	NSCAssert(NO, @"Use -initWithNext:error:completed: instead");
+	return nil;
 }
 
-- (id)init {
+- (id)initWithNext:(void (^)(id x))next error:(void (^)(NSError *error))error completed:(void (^)(void))completed {
 	self = [super init];
 	if (self == nil) return nil;
 
-	@weakify(self);
+	_next = [next copy];
+	_error = [error copy];
+	_completed = [completed copy];
+	_disposable = [RACCompoundDisposable compoundDisposable];
 
-	RACDisposable *selfDisposable = [RACDisposable disposableWithBlock:^{
+	@weakify(self);
+	[self.disposable addDisposable:[RACDisposable disposableWithBlock:^{
 		@strongify(self);
+		if (self == nil) return;
 
 		@synchronized (self) {
-			self.disposed = YES;
+			self.next = nil;
+			self.error = nil;
+			self.completed = nil;
 		}
-	}];
+	}]];
 
-	_disposable = [RACCompoundDisposable compoundDisposable];
-	[_disposable addDisposable:selfDisposable];
-	
 	return self;
 }
 
@@ -64,29 +70,34 @@
 #pragma mark RACSubscriber
 
 - (void)sendNext:(id)value {
-	if (self.next == NULL) return;
+	if (self.disposable.disposed) return;
 
 	@synchronized (self) {
-		if (self.disposed) return;
-		self.next(value);
+		if (self.next != nil) self.next(value);
 	}
 }
 
-- (void)sendError:(NSError *)e {
+- (void)sendError:(NSError *)error {
+	if (self.disposable.disposed) return;
+
 	@synchronized (self) {
-		if (self.disposed) return;
+		// Preserve the error block through disposal.
+		__typeof__(self.error) errorBlock = self.error;
 
 		[self.disposable dispose];
-		if (self.error != NULL) self.error(e);
+		if (errorBlock != nil) errorBlock(error);
 	}
 }
 
 - (void)sendCompleted {
+	if (self.disposable.disposed) return;
+
 	@synchronized (self) {
-		if (self.disposed) return;
+		// Preserve the completion block through disposal.
+		__typeof__(self.completed) completedBlock = self.completed;
 
 		[self.disposable dispose];
-		if (self.completed != NULL) self.completed();
+		if (completedBlock != nil) completedBlock();
 	}
 }
 

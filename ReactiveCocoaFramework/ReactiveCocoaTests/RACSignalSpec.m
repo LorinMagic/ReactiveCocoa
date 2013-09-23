@@ -26,7 +26,6 @@
 #import "RACSignal+Operations.h"
 #import "RACSignalStartExamples.h"
 #import "RACSubject.h"
-#import "RACSubscriber+Private.h"
 #import "RACSubscriber.h"
 #import "RACTestScheduler.h"
 #import "RACTuple.h"
@@ -2872,13 +2871,13 @@ describe(@"-initially:", ^{
 	});
 
 	it(@"should run on subscription", ^{
-		[signal subscribe:[RACSubscriber new]];
+		[signal subscribeCompleted:^{}];
 		expect(initiallyInvokedCount).to.equal(1);
 	});
 
 	it(@"should re-run for each subscription", ^{
-		[signal subscribe:[RACSubscriber new]];
-		[signal subscribe:[RACSubscriber new]];
+		[signal subscribeCompleted:^{}];
+		[signal subscribeCompleted:^{}];
 		expect(initiallyInvokedCount).to.equal(2);
 	});
 });
@@ -3154,7 +3153,7 @@ describe(@"starting signals", ^{
 			}];
 
 			subscribe = [^{
-				[signal subscribe:[RACSubscriber subscriberWithNext:nil error:nil completed:nil]];
+				[signal subscribeCompleted:^{}];
 			} copy];
 		});
 

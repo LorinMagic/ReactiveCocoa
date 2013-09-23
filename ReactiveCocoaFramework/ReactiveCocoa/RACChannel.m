@@ -10,6 +10,8 @@
 #import "RACDisposable.h"
 #import "RACReplaySubject.h"
 #import "RACSignal+Operations.h"
+#import "RACSignal+Private.h"
+#import "RACSubscriber+Private.h"
 #import "RACUnit.h"
 
 @interface RACChannelTerminal ()
@@ -66,8 +68,8 @@
 
 #pragma mark RACSignal
 
-- (RACDisposable *)subscribe:(id<RACSubscriber>)subscriber {
-	return [self.values subscribe:subscriber];
+- (void)addSubscriber:(RACSubscriber *)subscriber {
+	[self.values addSubscriber:subscriber];
 }
 
 #pragma mark <RACSubscriber>
@@ -82,10 +84,6 @@
 
 - (void)sendCompleted {
 	[self.otherTerminal sendCompleted];
-}
-
-- (void)didSubscribeWithDisposable:(RACDisposable *)disposable {
-	[self.otherTerminal didSubscribeWithDisposable:disposable];
 }
 
 @end

@@ -18,6 +18,145 @@
 #import "RACSubject.h"
 #import "RACUnit.h"
 
+// The name of the shared examples for RACSubject subclasses.
+static NSString * const RACSubjectExamples = @"RACSubjectExamples";
+
+// The RACSubject object to test.
+static NSString * const RACSubjectExampleSubject = @"RACSubjectExampleSubject";
+
+// A block which returns an NSArray of the values received so far.
+static NSString * const RACSubjectExampleValuesReceivedBlock = @"RACSubjectExampleValuesReceivedBlock";
+
+// A block which returns any NSError received so far.
+static NSString * const RACSubjectExampleErrorReceivedBlock = @"RACSubjectExampleErrorReceivedBlock";
+
+// A block which returns a BOOL indicating whether the subject is successful
+// so far.
+static NSString * const RACSubjectExampleSuccessBlock = @"RACSubjectExampleSuccessBlock";
+
+SharedExampleGroupsBegin(RACSubjectExamples)
+
+sharedExamplesFor(RACSubjectExamples, ^(NSDictionary *data) {
+	__block NSArray * (^valuesReceived)(void);
+	__block NSError * (^errorReceived)(void);
+	__block BOOL (^success)(void);
+	__block RACSubject *subject;
+	
+	beforeEach(^{
+		valuesReceived = data[RACSubjectExampleValuesReceivedBlock];
+		errorReceived = data[RACSubjectExampleErrorReceivedBlock];
+		success = data[RACSubjectExampleSuccessBlock];
+		subject = data[RACSubjectExampleSubject];
+		expect(subject).notTo.beNil();
+	});
+
+	itShouldBehaveLike(RACSubscriberExamples, ^{
+		return @{
+			RACSubscriberExampleSubscriber: subject,
+			RACSubscriberExampleValuesReceivedBlock: valuesReceived,
+			RACSubscriberExampleErrorReceivedBlock: errorReceived,
+			RACSubscriberExampleSuccessBlock: success
+		};
+	});
+
+	describe(@"multiple subscriptions", ^{
+		__block RACSubject *first;
+		__block RACSubject *second;
+
+		beforeEach(^{
+			first = [RACSubject subject];
+			[first subscribe:subject];
+
+			second = [RACSubject subject];
+			[second subscribe:subject];
+		});
+
+		it(@"should send values from all subscriptions", ^{
+			[first sendNext:@"foo"];
+			[second sendNext:@"bar"];
+			[first sendNext:@"buzz"];
+			[second sendNext:@"baz"];
+
+			expect(success()).to.beTruthy();
+			expect(errorReceived()).to.beNil();
+
+			NSArray *expected = @[ @"foo", @"bar", @"buzz", @"baz" ];
+			expect(valuesReceived()).to.equal(expected);
+		});
+
+		it(@"should terminate after the first error from any subscription", ^{
+			NSError *error = [NSError errorWithDomain:@"" code:-1 userInfo:nil];
+
+			[first sendNext:@"foo"];
+			[second sendError:error];
+			[first sendNext:@"buzz"];
+
+			expect(success()).to.beFalsy();
+			expect(errorReceived()).to.equal(error);
+
+			NSArray *expected = @[ @"foo" ];
+			expect(valuesReceived()).to.equal(expected);
+		});
+
+		it(@"should terminate after the first completed from any subscription", ^{
+			[first sendNext:@"foo"];
+			[second sendNext:@"bar"];
+			[first sendCompleted];
+			[second sendNext:@"baz"];
+
+			expect(success()).to.beTruthy();
+			expect(errorReceived()).to.beNil();
+
+			NSArray *expected = @[ @"foo", @"bar" ];
+			expect(valuesReceived()).to.equal(expected);
+		});
+
+		it(@"should dispose of all current subscriptions upon termination", ^{
+			__block BOOL firstDisposed = NO;
+			RACSignal *firstDisposableSignal = [RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+				return [RACDisposable disposableWithBlock:^{
+					firstDisposed = YES;
+				}];
+			}];
+
+			__block BOOL secondDisposed = NO;
+			RACSignal *secondDisposableSignal = [RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+				return [RACDisposable disposableWithBlock:^{
+					secondDisposed = YES;
+				}];
+			}];
+
+			[firstDisposableSignal subscribe:subject];
+			[secondDisposableSignal subscribe:subject];
+			
+			expect(firstDisposed).to.beFalsy();
+			expect(secondDisposed).to.beFalsy();
+
+			[first sendCompleted];
+
+			expect(firstDisposed).to.beTruthy();
+			expect(secondDisposed).to.beTruthy();
+		});
+
+		it(@"should dispose of future subscriptions upon termination", ^{
+			__block BOOL disposed = NO;
+			RACSignal *disposableSignal = [RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+				return [RACDisposable disposableWithBlock:^{
+					disposed = YES;
+				}];
+			}];
+
+			[first sendCompleted];
+			expect(disposed).to.beFalsy();
+
+			[disposableSignal subscribe:subject];
+			expect(disposed).to.beTruthy();
+		});
+	});
+});
+
+SharedExampleGroupsEnd
+
 SpecBegin(RACSubject)
 
 describe(@"RACSubject", ^{

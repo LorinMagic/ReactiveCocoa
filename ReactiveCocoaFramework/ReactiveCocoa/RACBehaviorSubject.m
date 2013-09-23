@@ -7,8 +7,11 @@
 //
 
 #import "RACBehaviorSubject.h"
+#import "RACCompoundDisposable.h"
 #import "RACDisposable.h"
 #import "RACScheduler+Private.h"
+#import "RACSignal+Private.h"
+#import "RACSubscriber+Private.h"
 
 @interface RACBehaviorSubject ()
 
@@ -29,19 +32,16 @@
 
 #pragma mark RACSignal
 
-- (RACDisposable *)subscribe:(id<RACSubscriber>)subscriber {
-	RACDisposable *subscriptionDisposable = [super subscribe:subscriber];
+- (void)addSubscriber:(RACSubscriber *)subscriber {
+	[super addSubscriber:subscriber];
 
 	RACDisposable *schedulingDisposable = [RACScheduler.subscriptionScheduler schedule:^{
 		@synchronized (self) {
 			[subscriber sendNext:self.currentValue];
 		}
 	}];
-	
-	return [RACDisposable disposableWithBlock:^{
-		[subscriptionDisposable dispose];
-		[schedulingDisposable dispose];
-	}];
+
+	if (schedulingDisposable != nil) [subscriber.disposable addDisposable:schedulingDisposable];
 }
 
 #pragma mark RACSubscriber

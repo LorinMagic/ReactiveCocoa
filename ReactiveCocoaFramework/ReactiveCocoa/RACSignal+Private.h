@@ -8,8 +8,11 @@
 
 #import "RACSignal.h"
 
+@class RACSubscriber;
+
 @interface RACSignal ()
 
+- (void)addSubscriber:(RACSubscriber *)subscriber;
 - (void)performBlockOnEachSubscriber:(void (^)(id<RACSubscriber> subscriber))block;
 
 @end
