@@ -8,6 +8,7 @@
 
 #import "RACSubscriptionScheduler.h"
 #import "RACScheduler+Private.h"
+#import "RACSerialDisposable.h"
 
 @interface RACSubscriptionScheduler ()
 
@@ -33,12 +34,26 @@
 #pragma mark RACScheduler
 
 - (RACDisposable *)schedule:(void (^)(void))block {
-	NSCParameterAssert(block != NULL);
+	NSCParameterAssert(block != nil);
 
 	if (RACScheduler.currentScheduler == nil) return [self.backgroundScheduler schedule:block];
 
 	block();
 	return nil;
+}
+
+- (RACDisposable *)scheduleRecursiveBlock:(RACSchedulerRecursiveBlock)recursiveBlock {
+	NSCParameterAssert(recursiveBlock != nil);
+
+	RACScheduler *scheduler = RACScheduler.currentScheduler;
+	if (scheduler == nil) return [self.backgroundScheduler scheduleRecursiveBlock:recursiveBlock];
+
+	RACSerialDisposable *serialDisposable = [[RACSerialDisposable alloc] init];
+	recursiveBlock(^{
+		serialDisposable.disposable = [scheduler scheduleRecursiveBlock:recursiveBlock];
+	});
+
+	return serialDisposable;
 }
 
 - (RACDisposable *)after:(NSDate *)date schedule:(void (^)(void))block {

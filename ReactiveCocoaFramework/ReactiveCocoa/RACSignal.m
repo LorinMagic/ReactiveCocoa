@@ -79,25 +79,24 @@ static volatile uint32_t RACWillCheckActiveSignals = 0;
 }
 
 + (RACSignal *)createSignal:(RACDisposable * (^)(id<RACSubscriber> subscriber))didSubscribe {
-	RACSignal *signal = [self generator:^ RACSignalStepBlock (id<RACSubscriber> subscriber, RACCompoundDisposable *compoundDisposable) {
+	return [[self generator:^ RACSignalStepBlock (id<RACSubscriber> subscriber, RACCompoundDisposable *compoundDisposable) {
 		RACDisposable *disposable = didSubscribe(subscriber);
 		if (disposable != nil) [compoundDisposable addDisposable:disposable];
 
 		return nil;
-	}];
-
-	return [signal setNameWithFormat:@"+createSignal:"];
+	}] setNameWithFormat:@"+createSignal:"];
 }
 
 + (RACSignal *)error:(NSError *)error {
-	return [[self createSignal:^ RACDisposable * (id<RACSubscriber> subscriber) {
-		[subscriber sendError:error];
-		return nil;
+	return [[self generator:^(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable) {
+		return ^{
+			[subscriber sendError:error];
+		};
 	}] setNameWithFormat:@"+error: %@", error];
 }
 
 + (RACSignal *)never {
-	return [[self createSignal:^ RACDisposable * (id<RACSubscriber> subscriber) {
+	return [[self generator:^ RACSignalStepBlock (id<RACSubscriber> subscriber, RACCompoundDisposable *disposable) {
 		return nil;
 	}] setNameWithFormat:@"+never"];
 }
@@ -256,17 +255,19 @@ static void RACCheckActiveSignals(void) {
 @implementation RACSignal (RACStream)
 
 + (RACSignal *)empty {
-	return [[self createSignal:^ RACDisposable * (id<RACSubscriber> subscriber) {
-		[subscriber sendCompleted];
-		return nil;
+	return [[self generator:^(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable) {
+		return ^{
+			[subscriber sendCompleted];
+		};
 	}] setNameWithFormat:@"+empty"];
 }
 
 + (RACSignal *)return:(id)value {
-	return [[self createSignal:^ RACDisposable * (id<RACSubscriber> subscriber) {
-		[subscriber sendNext:value];
-		[subscriber sendCompleted];
-		return nil;
+	return [[self generator:^(id<RACSubscriber> subscriber, RACCompoundDisposable *disposable) {
+		return ^{
+			[subscriber sendNext:value];
+			[subscriber sendCompleted];
+		};
 	}] setNameWithFormat:@"+return: %@", [value rac_description]];
 }
 
